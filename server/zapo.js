@@ -1,3 +1,12 @@
+// Garante que o WebSocket global esteja disponível no ambiente Node
+if (!global.WebSocket) {
+  try {
+    global.WebSocket = require('ws');
+  } catch (e) {
+    console.warn('[Zapo] Módulo ws não encontrado');
+  }
+}
+
 const { WaClient, createStore, createNoopLogger, proto } = require('zapo-js');
 const qrcode = require('qrcode');
 const fs = require('fs');
