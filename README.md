@@ -8,10 +8,10 @@
 
 Clique no botão abaixo para baixar o instalador diretamente no seu celular Android:
 
-[![Baixar APK Rastreador GPS](https://img.shields.io/badge/BAIXAR_APK-RastreadorGPS.apk-22c55e?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Rayan-Novik/Rastreador/releases/latest/download/RastreadorGPS.apk)
-[![Página de Releases](https://img.shields.io/badge/Outras_Versões-Página_de_Releases-38bdf8?style=for-the-badge&logo=github)](https://github.com/Rayan-Novik/Rastreador/releases)
+[![Baixar APK Rastreador GPS](https://img.shields.io/badge/BAIXAR_APK-RastreadorGPS.apk-22c55e?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Rayan-Novik/Rastreador/releases/download/v1.0.0/RastreadorGPS.apk)
+[![Página de Releases](https://img.shields.io/badge/Release_Oficial-v1.0.0-38bdf8?style=for-the-badge&logo=github)](https://github.com/Rayan-Novik/Rastreador/releases/tag/v1.0.0)
 
-### 📲 [👉 CLIQUE AQUI PARA BAIXAR O ARQUIVO APK](https://github.com/Rayan-Novik/Rastreador/releases/latest/download/RastreadorGPS.apk)
+### 📲 [👉 CLIQUE AQUI PARA BAIXAR O ARQUIVO APK (v1.0.0)](https://github.com/Rayan-Novik/Rastreador/releases/download/v1.0.0/RastreadorGPS.apk)
 
 ---
 
