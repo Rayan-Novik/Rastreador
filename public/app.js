@@ -350,6 +350,9 @@ function connectSocket() {
       showToast('Histórico do dispositivo foi limpo');
     }
   });
+
+  // Escutar eventos do WhatsApp Zapo
+  attachWhatsAppSocketListeners(socket);
 }
 
 /**
@@ -499,8 +502,237 @@ btnSaveConfig.addEventListener('click', () => {
   }
 });
 
+// ==========================================
+// MÓDULO WHATSAPP ZAPO (ATENDIMENTO & APAGADAS)
+// ==========================================
+const btnOpenWhatsApp = document.getElementById('btnOpenWhatsApp');
+const whatsappModal = document.getElementById('whatsappModal');
+const btnCloseWhatsApp = document.getElementById('btnCloseWhatsApp');
+const btnWaLogout = document.getElementById('btnWaLogout');
+const waStatusText = document.getElementById('waStatusText');
+const waQrSection = document.getElementById('waQrSection');
+const waQrImg = document.getElementById('waQrImg');
+const waChatSection = document.getElementById('waChatSection');
+const waConversationsList = document.getElementById('waConversationsList');
+const waMessagesList = document.getElementById('waMessagesList');
+const waCurrentContactName = document.getElementById('waCurrentContactName');
+const waCurrentContactJid = document.getElementById('waCurrentContactJid');
+const waDeletedBadge = document.getElementById('waDeletedBadge');
+const waSendForm = document.getElementById('waSendForm');
+const waMsgInput = document.getElementById('waMsgInput');
+const btnNewChat = document.getElementById('btnNewChat');
+
+let waCurrentChatJid = null;
+let waConversations = [];
+
+btnOpenWhatsApp.addEventListener('click', () => {
+  whatsappModal.classList.add('open');
+  fetchWhatsAppStatus();
+  fetchWhatsAppConversations();
+});
+
+btnCloseWhatsApp.addEventListener('click', () => {
+  whatsappModal.classList.remove('open');
+});
+
+async function fetchWhatsAppStatus() {
+  try {
+    const res = await fetch(`${backendUrl}/api/whatsapp/status`);
+    const data = await res.json();
+    if (data.success) {
+      updateWhatsAppUI(data);
+    }
+  } catch (err) {
+    console.error('Erro ao buscar status do WhatsApp:', err);
+  }
+}
+
+async function fetchWhatsAppConversations() {
+  try {
+    const res = await fetch(`${backendUrl}/api/whatsapp/conversations`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.conversations)) {
+      waConversations = data.conversations;
+      renderConversationsList();
+      if (waCurrentChatJid) {
+        renderCurrentChatMessages();
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao buscar conversas:', err);
+  }
+}
+
+function updateWhatsAppUI(data) {
+  if (data.status === 'connected') {
+    waStatusText.innerHTML = `<span style="color:var(--accent-green)">● Conectado (${data.me || 'WhatsApp'})</span>`;
+    waQrSection.style.display = 'none';
+    waChatSection.style.display = 'flex';
+  } else if (data.status === 'qrcode' && data.qr) {
+    waStatusText.innerHTML = `<span style="color:var(--accent-amber)">● Escaneie o QR Code</span>`;
+    waQrImg.src = data.qr;
+    waQrSection.style.display = 'flex';
+    waChatSection.style.display = 'none';
+  } else {
+    waStatusText.innerHTML = `<span style="color:var(--accent-rose)">● Desconectado / Conectando...</span>`;
+    waQrSection.style.display = 'none';
+    waChatSection.style.display = 'flex';
+  }
+}
+
+function renderConversationsList() {
+  if (waConversations.length === 0) {
+    waConversationsList.innerHTML = '<div style="color:var(--text-muted); font-size:0.75rem; text-align:center; padding:15px;">Nenhuma conversa recente</div>';
+    return;
+  }
+
+  waConversationsList.innerHTML = waConversations.map(c => {
+    const isSelected = c.chatJid === waCurrentChatJid;
+    const phone = c.chatJid.replace('@s.whatsapp.net', '');
+    return `
+      <div class="wa-chat-item ${isSelected ? 'active' : ''}" onclick="selectWhatsAppChat('${c.chatJid}')" style="padding:10px; border-radius:8px; cursor:pointer; background: ${isSelected ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${isSelected ? 'var(--accent-blue)' : 'transparent'};">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-weight:600; font-size:0.85rem; color:#fff;">${c.senderName || phone}</div>
+          ${c.hasDeleted ? '<span style="color:var(--accent-rose); font-size:0.7rem;" title="Contém mensagens apagadas"><i class="fa-solid fa-eye-slash"></i></span>' : ''}
+        </div>
+        <div style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:3px;">
+          ${c.lastMessage}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+window.selectWhatsAppChat = function(jid) {
+  waCurrentChatJid = jid;
+  const chat = waConversations.find(c => c.chatJid === jid);
+  if (chat) {
+    waCurrentContactName.textContent = chat.senderName || chat.chatJid.replace('@s.whatsapp.net', '');
+    waCurrentContactJid.textContent = chat.chatJid;
+    waDeletedBadge.style.display = chat.hasDeleted ? 'inline-block' : 'none';
+  }
+  renderConversationsList();
+  renderCurrentChatMessages();
+};
+
+function renderCurrentChatMessages() {
+  if (!waCurrentChatJid) return;
+  const chat = waConversations.find(c => c.chatJid === waCurrentChatJid);
+  if (!chat || !chat.messages || chat.messages.length === 0) {
+    waMessagesList.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; text-align:center; margin-top:40px;">Sem mensagens nesta conversa</div>';
+    return;
+  }
+
+  waMessagesList.innerHTML = chat.messages.map(m => {
+    const isMe = m.fromMe;
+    const isDeleted = m.deleted;
+    const time = new Date(m.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+    return `
+      <div style="display:flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'};">
+        <div style="max-width:75%; padding:10px 14px; border-radius:12px; background: ${isMe ? 'linear-gradient(135deg, #0284c7, #0369a1)' : '#1e293b'}; color:#fff; border: 1px solid ${isDeleted ? 'var(--accent-rose)' : 'var(--border-color)'};">
+          ${isDeleted ? `
+            <div style="background: rgba(244,63,94,0.25); color: #fca5a5; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; margin-bottom: 5px; font-weight: bold; display: inline-flex; align-items:center; gap:4px;">
+              <i class="fa-solid fa-triangle-exclamation"></i> Mensagem Apagada pelo Cliente (Salva na Zapo)
+            </div>
+          ` : ''}
+          <div style="font-size: 0.9rem; word-break: break-word;">${escapeHtml(m.text)}</div>
+          <div style="font-size: 0.68rem; color: rgba(255,255,255,0.6); text-align: right; margin-top: 4px;">
+            ${time} ${isMe ? '✓✓' : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  waMessagesList.scrollTop = waMessagesList.scrollHeight;
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+waSendForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = waMsgInput.value.trim();
+  if (!text) return;
+  if (!waCurrentChatJid) {
+    alert('Selecione ou inicie uma conversa primeiro!');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${backendUrl}/api/whatsapp/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: waCurrentChatJid, text })
+    });
+    const data = await res.json();
+    if (data.success) {
+      waMsgInput.value = '';
+      fetchWhatsAppConversations();
+    } else {
+      alert('Erro ao enviar mensagem: ' + data.error);
+    }
+  } catch (err) {
+    alert('Erro de conexão: ' + err.message);
+  }
+});
+
+btnNewChat.addEventListener('click', () => {
+  const number = prompt('Digite o número do WhatsApp com DDD (Ex: 5511999999999):');
+  if (number) {
+    const clean = number.replace(/\D/g, '');
+    const jid = `${clean}@s.whatsapp.net`;
+    selectWhatsAppChat(jid);
+    if (!waConversations.some(c => c.chatJid === jid)) {
+      waConversations.unshift({
+        chatJid: jid,
+        senderName: clean,
+        lastMessage: 'Nova conversa iniciada',
+        lastTimestamp: new Date().toISOString(),
+        hasDeleted: false,
+        messages: []
+      });
+      renderConversationsList();
+      renderCurrentChatMessages();
+    }
+  }
+});
+
+btnWaLogout.addEventListener('click', async () => {
+  if (!confirm('Deseja realmente desconectar o WhatsApp da Zapo?')) return;
+  try {
+    await fetch(`${backendUrl}/api/whatsapp/logout`, { method: 'POST' });
+    showToast('WhatsApp desconectado!');
+    fetchWhatsAppStatus();
+  } catch (err) {
+    alert('Erro ao deslogar: ' + err.message);
+  }
+});
+
+// Eventos de Tempo Real do WhatsApp via Socket.IO
+function attachWhatsAppSocketListeners(s) {
+  if (!s) return;
+  s.on('whatsapp:status', (data) => {
+    updateWhatsAppUI(data);
+  });
+
+  s.on('whatsapp:message', (msg) => {
+    fetchWhatsAppConversations();
+    showToast(`WhatsApp: Nova mensagem de ${msg.sender}`);
+  });
+
+  s.on('whatsapp:message_deleted', (data) => {
+    fetchWhatsAppConversations();
+    showToast(`⚠️ WhatsApp: Mensagem apagada foi salva!`);
+  });
+}
+
 // Inicialização Geral
 window.addEventListener('DOMContentLoaded', () => {
   initMap();
   setupSocket();
+  if (socket) attachWhatsAppSocketListeners(socket);
 });

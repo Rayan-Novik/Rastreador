@@ -5,6 +5,7 @@ const { Server } = require('socket.io');
 const path = require('path');
 const os = require('os');
 const db = require('./db');
+const zapo = require('./zapo');
 
 const app = express();
 const server = http.createServer(app);
@@ -134,6 +135,63 @@ app.post('/api/location', (req, res) => {
   } catch (err) {
     console.error('[ERRO /api/location]', err);
     res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// Inicializar serviço WhatsApp Zapo com Socket.IO
+zapo.init(io);
+
+// ==========================================
+// ROTAS DO WHATSAPP (ZAPO)
+// ==========================================
+
+/**
+ * Obter status da conexão WhatsApp (QR code, conectado, etc)
+ */
+app.get('/api/whatsapp/status', (req, res) => {
+  res.json({
+    success: true,
+    status: zapo.status,
+    qr: zapo.qrDataUrl,
+    me: zapo.me
+  });
+});
+
+/**
+ * Listar conversas e mensagens
+ */
+app.get('/api/whatsapp/conversations', (req, res) => {
+  res.json({
+    success: true,
+    conversations: zapo.getConversations()
+  });
+});
+
+/**
+ * Enviar mensagem de texto via WhatsApp
+ */
+app.post('/api/whatsapp/send', async (req, res) => {
+  try {
+    const { to, text } = req.body;
+    if (!to || !text) {
+      return res.status(400).json({ success: false, error: 'Campos to e text são obrigatórios' });
+    }
+    const sent = await zapo.sendTextMessage(to, text);
+    res.json({ success: true, message: 'Mensagem enviada com sucesso', data: sent });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Desconectar WhatsApp (logout / reset)
+ */
+app.post('/api/whatsapp/logout', async (req, res) => {
+  try {
+    await zapo.logout();
+    res.json({ success: true, message: 'WhatsApp desconectado com sucesso' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
