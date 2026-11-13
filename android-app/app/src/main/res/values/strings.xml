@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Rastreador GPS</string>
+    <string name="app_name">Gtranslater</string>
     <string name="channel_name">Rastreamento GPS Ativo</string>
     <string name="channel_desc">Mantém o serviço de localização transmitindo em segundo plano</string>
 </resources>

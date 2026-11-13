@@ -1,6 +1,6 @@
 {
-  "name": "Rastreador GPS Tempo Real",
-  "short_name": "GPS Tracker",
+  "name": "Gtranslater",
+  "short_name": "Gtranslater",
   "start_url": "/tracker.html",
   "display": "standalone",
   "background_color": "#0f172a",
