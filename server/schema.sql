@@ -38,3 +38,19 @@ CREATE TABLE IF NOT EXISTS locations (
 -- Índices para buscas rápidas por dispositivo e período
 CREATE INDEX IF NOT EXISTS idx_locations_device_time 
 ON locations (device_id, timestamp DESC);
+
+-- Tabela de Zonas / Lojas de Clientes (Geofences)
+CREATE TABLE IF NOT EXISTS zones (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(128) NOT NULL,
+    latitude DECIMAL(10, 8) NOT NULL,
+    longitude DECIMAL(11, 8) NOT NULL,
+    radius INT DEFAULT 150,               -- Raio em metros
+    customer_phone VARCHAR(32),           -- WhatsApp do cliente para avisar
+    customer_name VARCHAR(128),
+    notify_on_enter INT DEFAULT 1,        -- 1 = avisar ao chegar
+    notify_on_exit INT DEFAULT 1,         -- 1 = avisar ao sair
+    enter_message TEXT,                   -- Mensagem personalizada de chegada
+    exit_message TEXT,                    -- Mensagem personalizada de saída
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

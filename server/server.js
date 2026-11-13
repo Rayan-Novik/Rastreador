@@ -127,6 +127,41 @@ app.post('/api/location', (req, res) => {
     // Emissão em tempo real para todos os clientes conectados no painel web
     io.emit('location_update', result);
 
+    // ==========================================
+    // VERIFICADOR DE ZONAS / LOJAS (GEOFENCING)
+    // ==========================================
+    if (result.device && latitude && longitude) {
+      const zoneEvents = db.checkZoneTransitions(result.device, latitude, longitude);
+      for (const ev of zoneEvents) {
+        console.log(`[ZONA ALERTA] Dispositivo "${ev.device.name}" ${ev.type === 'enter' ? 'CHEGOU NA ZONA' : 'SAIU DA ZONA'} "${ev.zone.name}"!`);
+        
+        // 1. Notifica o painel web com som de alerta e notificação
+        io.emit('zone:alert', {
+          type: ev.type, // 'enter' | 'exit'
+          zone: ev.zone,
+          device: ev.device,
+          distance: ev.distance,
+          timestamp: new Date().toISOString()
+        });
+
+        // 2. Se a zona tiver WhatsApp configurado, envia aviso automático pelo Zapo!
+        if (ev.zone.customer_phone) {
+          let msgText = '';
+          if (ev.type === 'enter' && ev.zone.notify_on_enter) {
+            msgText = ev.zone.enter_message || `Olá ${ev.zone.customer_name || ''}! O entregador (${ev.device.name}) acaba de chegar no seu local!`;
+          } else if (ev.type === 'exit' && ev.zone.notify_on_exit) {
+            msgText = ev.zone.exit_message || `Olá ${ev.zone.customer_name || ''}! O entregador (${ev.device.name}) saiu para entrega e está a caminho com seu pedido!`;
+          }
+
+          if (msgText) {
+            zapo.sendTextMessage(ev.zone.customer_phone, msgText)
+              .then(() => console.log(`[Zapo Geofence] WhatsApp enviado para ${ev.zone.customer_phone}: ${msgText}`))
+              .catch(err => console.warn(`[Zapo Geofence] Falha ao enviar WhatsApp: ${err.message}`));
+          }
+        }
+      }
+    }
+
     res.json({
       success: true,
       message: 'Localização atualizada e registrada no SQL com sucesso',
@@ -195,6 +230,48 @@ app.post('/api/whatsapp/logout', async (req, res) => {
   }
 });
 
+// ==========================================
+// ROTAS DE ZONAS / LOJAS (GEOFENCING)
+// ==========================================
+
+/**
+ * Listar todas as zonas cadastradas
+ */
+app.get('/api/zones', (req, res) => {
+  try {
+    const zones = db.getAllZones();
+    res.json({ success: true, count: zones.length, zones });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Cadastrar ou atualizar uma zona
+ */
+app.post('/api/zones', (req, res) => {
+  try {
+    const zone = db.saveZone(req.body);
+    io.emit('zones_updated', db.getAllZones());
+    res.json({ success: true, message: 'Zona cadastrada com sucesso', zone });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Excluir uma zona
+ */
+app.delete('/api/zones/:id', (req, res) => {
+  try {
+    db.deleteZone(req.params.id);
+    io.emit('zones_updated', db.getAllZones());
+    res.json({ success: true, message: 'Zona excluída com sucesso' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 /**
  * Download ou visualização do arquivo SQL gerado no servidor
  */
@@ -216,8 +293,9 @@ app.get('/api/database.sql', (req, res) => {
 io.on('connection', (socket) => {
   console.log(`[WS] Novo cliente conectado: ${socket.id}`);
 
-  // Envia a lista atual de dispositivos para o recém conectado
+  // Envia a lista atual de dispositivos e zonas para o recém conectado
   socket.emit('devices_list', db.getAllDevices());
+  socket.emit('zones_list', db.getAllZones());
 
   // Recebimento de localização diretamente por WebSocket (baixa latência)
   socket.on('tracker:send_location', (data) => {

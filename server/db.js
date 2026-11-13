@@ -9,7 +9,9 @@ const STATE_FILE = path.join(DATA_DIR, 'state.json');
 // Estrutura em memória para consultas em tempo real com alta performance
 const dbState = {
   devices: new Map(),       // deviceId => { id, name, status, last_latitude, ... }
-  locations: []             // array de { id, deviceId, latitude, longitude, ... }
+  locations: [],            // array de { id, deviceId, latitude, longitude, ... }
+  zones: new Map(),         // zoneId => { id, name, latitude, longitude, radius, customer_phone, ... }
+  deviceZoneState: new Map() // `${deviceId}_${zoneId}` => 'inside' | 'outside'
 };
 
 let locationAutoId = 1;
@@ -52,7 +54,10 @@ function initDatabase() {
           locationAutoId = Math.max(...dbState.locations.map(l => l.id || 0)) + 1;
         }
       }
-      console.log(`[DB] Estado carregado: ${dbState.devices.size} dispositivos, ${dbState.locations.length} localizações.`);
+      if (Array.isArray(data.zones)) {
+        data.zones.forEach(z => dbState.zones.set(z.id, z));
+      }
+      console.log(`[DB] Estado carregado: ${dbState.devices.size} dispositivos, ${dbState.locations.length} localizações, ${dbState.zones.size} zonas de entrega.`);
     } catch (err) {
       console.error('[DB] Erro ao carregar state.json, iniciando novo:', err.message);
     }
@@ -66,7 +71,8 @@ function persistState() {
   try {
     const state = {
       devices: Array.from(dbState.devices.values()),
-      locations: dbState.locations.slice(-5000) // mantém os últimos 5000 pontos em memória
+      locations: dbState.locations.slice(-5000), // mantém os últimos 5000 pontos em memória
+      zones: Array.from(dbState.zones.values())
     };
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
   } catch (err) {
@@ -249,6 +255,122 @@ function clearDeviceHistory(deviceId) {
 }
 
 /**
+ * Funções de Zonas / Lojas de Clientes (Geofences)
+ */
+function saveZone(zoneData) {
+  const {
+    id = 'zone_' + Math.random().toString(36).substring(2, 9),
+    name,
+    latitude,
+    longitude,
+    radius = 150,
+    customer_phone = '',
+    customer_name = '',
+    notify_on_enter = 1,
+    notify_on_exit = 1,
+    enter_message = '',
+    exit_message = ''
+  } = zoneData;
+
+  const latNum = parseFloat(latitude);
+  const lngNum = parseFloat(longitude);
+  const radNum = parseInt(radius, 10) || 150;
+
+  if (isNaN(latNum) || isNaN(lngNum)) {
+    throw new Error('Coordenadas da zona são inválidas');
+  }
+
+  const zone = {
+    id,
+    name: name || 'Loja / Cliente',
+    latitude: latNum,
+    longitude: lngNum,
+    radius: radNum,
+    customer_phone: customer_phone.trim(),
+    customer_name: customer_name.trim(),
+    notify_on_enter: notify_on_enter ? 1 : 0,
+    notify_on_exit: notify_on_exit ? 1 : 0,
+    enter_message: enter_message.trim(),
+    exit_message: exit_message.trim(),
+    createdAt: new Date().toISOString()
+  };
+
+  dbState.zones.set(id, zone);
+
+  const zoneSql = `INSERT INTO zones (id, name, latitude, longitude, radius, customer_phone, customer_name, notify_on_enter, notify_on_exit, enter_message, exit_message)
+VALUES (${escapeSql(zone.id)}, ${escapeSql(zone.name)}, ${zone.latitude}, ${zone.longitude}, ${zone.radius}, ${escapeSql(zone.customer_phone)}, ${escapeSql(zone.customer_name)}, ${zone.notify_on_enter}, ${zone.notify_on_exit}, ${escapeSql(zone.enter_message)}, ${escapeSql(zone.exit_message)})
+ON CONFLICT(id) DO UPDATE SET
+  name = excluded.name,
+  latitude = excluded.latitude,
+  longitude = excluded.longitude,
+  radius = excluded.radius,
+  customer_phone = excluded.customer_phone,
+  customer_name = excluded.customer_name,
+  notify_on_enter = excluded.notify_on_enter,
+  notify_on_exit = excluded.notify_on_exit,
+  enter_message = excluded.enter_message,
+  exit_message = excluded.exit_message;`;
+
+  appendSqlStatement(`\n-- Zona criada/atualizada em ${new Date().toISOString()}\n${zoneSql}`);
+  persistState();
+
+  return zone;
+}
+
+function getAllZones() {
+  return Array.from(dbState.zones.values());
+}
+
+function deleteZone(zoneId) {
+  dbState.zones.delete(zoneId);
+  appendSqlStatement(`\n-- Zona excluída em ${new Date().toISOString()}\nDELETE FROM zones WHERE id = ${escapeSql(zoneId)};`);
+  persistState();
+}
+
+/**
+ * Checa se um motoqueiro/dispositivo entrou ou saiu de qualquer zona cadastrada
+ * Retorna array de eventos disparados: [ { type: 'enter' | 'exit', zone, device, distance } ]
+ */
+function checkZoneTransitions(device, lat, lng) {
+  const events = [];
+  const latNum = parseFloat(lat);
+  const lngNum = parseFloat(lng);
+
+  for (const zone of dbState.zones.values()) {
+    // Distância Haversine simplificada em metros
+    const dLat = (latNum - zone.latitude) * 111320;
+    const dLng = (lngNum - zone.longitude) * (111320 * Math.cos(zone.latitude * (Math.PI / 180)));
+    const distanceMeters = Math.sqrt(dLat * dLat + dLng * dLng);
+
+    const isInsideNow = distanceMeters <= zone.radius;
+    const stateKey = `${device.id}_${zone.id}`;
+    const previousState = dbState.deviceZoneState.get(stateKey) || 'outside';
+
+    if (isInsideNow && previousState === 'outside') {
+      // Disparou ENTRADA na zona
+      dbState.deviceZoneState.set(stateKey, 'inside');
+      events.push({
+        type: 'enter',
+        zone,
+        device,
+        distance: Math.round(distanceMeters)
+      });
+    } else if (!isInsideNow && previousState === 'inside') {
+      // Disparou SAÍDA da zona
+      dbState.deviceZoneState.set(stateKey, 'outside');
+      events.push({
+        type: 'exit',
+        zone,
+        device,
+        distance: Math.round(distanceMeters)
+      });
+    }
+  }
+
+  return events;
+}
+
+/**
  * Retorna o conteúdo do arquivo SQL completo
  */
 function getSqlFileContent() {
@@ -268,5 +390,9 @@ module.exports = {
   getDeviceHistory,
   clearDeviceHistory,
   getSqlFileContent,
+  saveZone,
+  getAllZones,
+  deleteZone,
+  checkZoneTransitions,
   SQL_FILE
 };

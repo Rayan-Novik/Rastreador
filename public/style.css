@@ -459,6 +459,109 @@ body {
   outline: none;
 }
 
+/* Banner de Modo de Seleção no Mapa */
+.zone-selection-banner {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid var(--accent-blue);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 30px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  z-index: 1500;
+  font-size: 0.85rem;
+  animation: pulseSelection 1.5s infinite alternate;
+}
+
+@keyframes pulseSelection {
+  from { box-shadow: 0 0 10px rgba(56, 189, 248, 0.4); }
+  to { box-shadow: 0 0 20px rgba(56, 189, 248, 0.8); }
+}
+
+/* Banner de Alerta de Chegada / Saída de Zona */
+.zone-alert-banner {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: linear-gradient(135deg, #0f172a, #1e293b);
+  border-left: 5px solid var(--accent-green);
+  border-top: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  color: #fff;
+  padding: 14px 18px;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  z-index: 2000;
+  min-width: 320px;
+  max-width: 90vw;
+  animation: slideInRight 0.4s ease-out;
+}
+
+.zone-alert-banner.exit {
+  border-left-color: var(--accent-amber);
+}
+
+.zone-alert-icon {
+  font-size: 1.6rem;
+  color: var(--accent-green);
+  animation: ringBell 0.8s infinite alternate;
+}
+
+.zone-alert-banner.exit .zone-alert-icon {
+  color: var(--accent-amber);
+}
+
+@keyframes ringBell {
+  0% { transform: rotate(-15deg); }
+  100% { transform: rotate(15deg); }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.zone-alert-content {
+  flex: 1;
+}
+
+.zone-alert-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 2px;
+}
+
+.zone-alert-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Marcador de Loja / Cliente no Leaflet */
+.store-map-icon {
+  width: 32px;
+  height: 32px;
+  background: #10b981;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 14px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+
 /* Responsividade Mobile */
 @media (max-width: 768px) {
   .app-container {

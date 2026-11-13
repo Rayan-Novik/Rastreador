@@ -130,6 +130,13 @@ function initMap() {
     btnFollow.classList.remove('btn-primary');
     btnFollow.classList.add('btn-secondary');
   });
+
+  // Clique no mapa para posicionar Loja / Zona de Entrega
+  map.on('click', (e) => {
+    if (isSelectingZoneLocation) {
+      handleMapZoneSelected(e.latlng.lat, e.latlng.lng);
+    }
+  });
 }
 
 /**
@@ -376,6 +383,19 @@ function connectSocket() {
       routePolyline.setLatLngs([]);
       showToast('Histórico do dispositivo foi limpo');
     }
+  });
+
+  // Zonas de Entrega / Lojas de Clientes (Geofencing)
+  socket.on('zones_list', (list) => {
+    updateZones(list);
+  });
+
+  socket.on('zones_updated', (list) => {
+    updateZones(list);
+  });
+
+  socket.on('zone:alert', (alertData) => {
+    showZoneAlertBanner(alertData);
   });
 
   // Escutar eventos do WhatsApp Zapo
@@ -757,9 +777,365 @@ function attachWhatsAppSocketListeners(s) {
   });
 }
 
+// ==========================================
+// MÓDULO DE ZONAS / LOJAS (GEOFENCING)
+// ==========================================
+const btnAddZone = document.getElementById('btnAddZone');
+const zoneModal = document.getElementById('zoneModal');
+const btnCloseZoneModal = document.getElementById('btnCloseZoneModal');
+const tabNewZone = document.getElementById('tabNewZone');
+const tabListZones = document.getElementById('tabListZones');
+const zoneFormSection = document.getElementById('zoneFormSection');
+const zoneListSection = document.getElementById('zoneListSection');
+const zonesCount = document.getElementById('zonesCount');
+const zoneForm = document.getElementById('zoneForm');
+const zoneIdInput = document.getElementById('zoneId');
+const zoneNameInput = document.getElementById('zoneName');
+const zoneLatInput = document.getElementById('zoneLat');
+const zoneLngInput = document.getElementById('zoneLng');
+const btnPickOnMap = document.getElementById('btnPickOnMap');
+const zoneRadiusInput = document.getElementById('zoneRadius');
+const zonePhoneInput = document.getElementById('zonePhone');
+const zoneCustomerNameInput = document.getElementById('zoneCustomerName');
+const zoneNotifyEnterInput = document.getElementById('zoneNotifyEnter');
+const zoneEnterMsgInput = document.getElementById('zoneEnterMsg');
+const zoneNotifyExitInput = document.getElementById('zoneNotifyExit');
+const zoneExitMsgInput = document.getElementById('zoneExitMsg');
+const btnCancelZoneForm = document.getElementById('btnCancelZoneForm');
+const zonesListContainer = document.getElementById('zonesListContainer');
+
+const zoneSelectionBanner = document.getElementById('zoneSelectionBanner');
+const btnCancelZoneSelection = document.getElementById('btnCancelZoneSelection');
+const zoneAlertBanner = document.getElementById('zoneAlertBanner');
+const btnCloseZoneAlert = document.getElementById('btnCloseZoneAlert');
+const zoneAlertTitle = document.getElementById('zoneAlertTitle');
+const zoneAlertDesc = document.getElementById('zoneAlertDesc');
+
+let zones = [];
+let zoneLayers = new Map(); // zoneId => { circle, marker }
+let isSelectingZoneLocation = false;
+let zoneAlertTimeout = null;
+
+// Áudio de Alerta (Sintetizador Web Audio API nativo)
+function playZoneAlertSound(type) {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    if (type === 'enter') {
+      // Bip alegre de chegada
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(659.25, ctx.currentTime);
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.36);
+    } else {
+      // Bip de saída (a caminho)
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+      osc.frequency.setValueAtTime(698.46, ctx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.35, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.41);
+    }
+  } catch (e) {
+    console.warn('Alerta sonoro:', e.message);
+  }
+}
+
+function showZoneAlertBanner(data) {
+  playZoneAlertSound(data.type);
+  if (!zoneAlertBanner) return;
+
+  if (data.type === 'enter') {
+    zoneAlertBanner.className = 'zone-alert-banner';
+    zoneAlertTitle.textContent = `🛵 CHEGOU NA LOJA / CLIENTE!`;
+    zoneAlertDesc.textContent = `${data.device ? data.device.name : 'Entregador'} chegou em "${data.zone.name}" (${Math.round(data.distance || 0)}m).`;
+  } else {
+    zoneAlertBanner.className = 'zone-alert-banner exit';
+    zoneAlertTitle.textContent = `🚀 SAIU PARA ENTREGA!`;
+    zoneAlertDesc.textContent = `${data.device ? data.device.name : 'Entregador'} saiu de "${data.zone.name}" e está a caminho com o pedido!`;
+  }
+
+  zoneAlertBanner.style.display = 'flex';
+
+  if (zoneAlertTimeout) clearTimeout(zoneAlertTimeout);
+  zoneAlertTimeout = setTimeout(() => {
+    zoneAlertBanner.style.display = 'none';
+  }, 12000);
+}
+
+if (btnCloseZoneAlert) {
+  btnCloseZoneAlert.addEventListener('click', () => {
+    zoneAlertBanner.style.display = 'none';
+  });
+}
+
+function updateZones(newZones) {
+  if (Array.isArray(newZones)) {
+    zones = newZones;
+  }
+  if (zonesCount) zonesCount.textContent = zones.length;
+  renderZoneLayers();
+  renderZonesList();
+}
+
+function renderZoneLayers() {
+  if (!map) return;
+
+  // Remove zonas antigas do mapa
+  zoneLayers.forEach(({ circle, marker }) => {
+    if (circle) map.removeLayer(circle);
+    if (marker) map.removeLayer(marker);
+  });
+  zoneLayers.clear();
+
+  // Adiciona novas zonas
+  zones.forEach(z => {
+    const circle = L.circle([z.latitude, z.longitude], {
+      radius: z.radius || 150,
+      color: '#10b981',
+      fillColor: '#10b981',
+      fillOpacity: 0.18,
+      weight: 2,
+      dashArray: '5, 5'
+    }).addTo(map);
+
+    const storeIcon = L.divIcon({
+      className: 'store-custom-marker',
+      html: `<div class="store-map-icon" title="${z.name}"><i class="fa-solid fa-store"></i></div>`,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16]
+    });
+
+    const marker = L.marker([z.latitude, z.longitude], { icon: storeIcon }).addTo(map);
+
+    marker.bindPopup(`
+      <div style="color: #0f172a; min-width: 200px; font-family: sans-serif;">
+        <div style="font-weight: bold; font-size: 1rem; color: #047857; margin-bottom: 4px;">
+          <i class="fa-solid fa-store"></i> ${z.name}
+        </div>
+        <div style="font-size: 0.8rem; color: #475569; margin-bottom: 2px;">
+          <strong>Raio de Entrega:</strong> ${z.radius} metros
+        </div>
+        ${z.customer_name ? `<div style="font-size: 0.8rem; color: #475569;"><strong>Cliente:</strong> ${z.customer_name}</div>` : ''}
+        ${z.customer_phone ? `<div style="font-size: 0.8rem; color: #16a34a; font-weight: 600;"><strong>WhatsApp:</strong> ${z.customer_phone}</div>` : ''}
+        <div style="margin-top: 10px; border-top: 1px solid #e2e8f0; padding-top: 6px; display: flex; justify-content: flex-end;">
+          <button onclick="window.deleteZone('${z.id}')" style="background: #f43f5e; color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">
+            <i class="fa-solid fa-trash-can"></i> Excluir Zona
+          </button>
+        </div>
+      </div>
+    `);
+
+    zoneLayers.set(z.id, { circle, marker });
+  });
+}
+
+function renderZonesList() {
+  if (!zonesListContainer) return;
+
+  if (zones.length === 0) {
+    zonesListContainer.innerHTML = `
+      <div style="text-align: center; color: var(--text-muted); padding: 30px 10px; font-size: 0.85rem;">
+        <i class="fa-solid fa-store" style="font-size: 2rem; margin-bottom: 8px; opacity: 0.4;"></i>
+        <p>Nenhuma loja ou zona cadastrada ainda.</p>
+        <p style="font-size: 0.75rem; margin-top: 4px;">Clique em "Cadastrar Loja" ou selecione direto no mapa!</p>
+      </div>
+    `;
+    return;
+  }
+
+  zonesListContainer.innerHTML = zones.map(z => `
+    <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+      <div style="flex: 1;">
+        <div style="font-weight: 600; font-size: 0.95rem; color: #fff; display: flex; align-items: center; gap: 6px;">
+          <i class="fa-solid fa-store" style="color: var(--accent-green);"></i> ${z.name}
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+          Raio: <strong>${z.radius}m</strong> | Lat: ${z.latitude.toFixed(4)}, Lng: ${z.longitude.toFixed(4)}
+        </div>
+        ${z.customer_phone ? `
+          <div style="font-size: 0.75rem; color: var(--accent-green); margin-top: 3px;">
+            <i class="fa-brands fa-whatsapp"></i> ${z.customer_phone} ${z.customer_name ? `(${z.customer_name})` : ''}
+          </div>
+        ` : ''}
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <button onclick="window.focusZone('${z.id}')" class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.75rem;" title="Ver no Mapa">
+          <i class="fa-solid fa-eye"></i>
+        </button>
+        <button onclick="window.deleteZone('${z.id}')" class="btn btn-danger" style="padding: 6px 10px; font-size: 0.75rem;" title="Excluir">
+          <i class="fa-solid fa-trash-can"></i>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// Abrir e fechar modal de zonas
+if (btnAddZone) {
+  btnAddZone.addEventListener('click', () => {
+    zoneModal.classList.add('open');
+    switchZoneTab('new');
+    fetchZones();
+  });
+}
+
+if (btnCloseZoneModal) {
+  btnCloseZoneModal.addEventListener('click', () => {
+    zoneModal.classList.remove('open');
+  });
+}
+
+if (btnCancelZoneForm) {
+  btnCancelZoneForm.addEventListener('click', () => {
+    zoneModal.classList.remove('open');
+  });
+}
+
+// Alternar abas do modal
+function switchZoneTab(tab) {
+  if (!tabNewZone || !tabListZones || !zoneFormSection || !zoneListSection) return;
+  if (tab === 'new') {
+    tabNewZone.className = 'btn btn-primary';
+    tabListZones.className = 'btn btn-secondary';
+    zoneFormSection.style.display = 'block';
+    zoneListSection.style.display = 'none';
+  } else {
+    tabNewZone.className = 'btn btn-secondary';
+    tabListZones.className = 'btn btn-primary';
+    zoneFormSection.style.display = 'none';
+    zoneListSection.style.display = 'block';
+  }
+}
+
+if (tabNewZone) tabNewZone.addEventListener('click', () => switchZoneTab('new'));
+if (tabListZones) tabListZones.addEventListener('click', () => switchZoneTab('list'));
+
+// Botão "Clicar no Mapa para Selecionar"
+if (btnPickOnMap) {
+  btnPickOnMap.addEventListener('click', () => {
+    zoneModal.classList.remove('open');
+    isSelectingZoneLocation = true;
+    zoneSelectionBanner.style.display = 'flex';
+    showToast('Clique no ponto do mapa onde fica a loja!');
+  });
+}
+
+if (btnCancelZoneSelection) {
+  btnCancelZoneSelection.addEventListener('click', () => {
+    isSelectingZoneLocation = false;
+    zoneSelectionBanner.style.display = 'none';
+    zoneModal.classList.add('open');
+  });
+}
+
+function handleMapZoneSelected(lat, lng) {
+  isSelectingZoneLocation = false;
+  zoneSelectionBanner.style.display = 'none';
+  zoneLatInput.value = lat.toFixed(6);
+  zoneLngInput.value = lng.toFixed(6);
+  zoneModal.classList.add('open');
+  switchZoneTab('new');
+  showToast(`Local selecionado: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+}
+
+// Salvar zona
+if (zoneForm) {
+  zoneForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      id: zoneIdInput.value || undefined,
+      name: zoneNameInput.value.trim(),
+      latitude: parseFloat(zoneLatInput.value),
+      longitude: parseFloat(zoneLngInput.value),
+      radius: parseInt(zoneRadiusInput.value, 10) || 150,
+      customer_phone: zonePhoneInput.value.trim(),
+      customer_name: zoneCustomerNameInput.value.trim(),
+      notify_on_enter: zoneNotifyEnterInput.checked ? 1 : 0,
+      notify_on_exit: zoneNotifyExitInput.checked ? 1 : 0,
+      enter_message: zoneEnterMsgInput.value.trim(),
+      exit_message: zoneExitMsgInput.value.trim()
+    };
+
+    try {
+      const res = await fetch(`${backendUrl}/api/zones`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Loja / Zona cadastrada com sucesso!');
+        zoneForm.reset();
+        zoneIdInput.value = '';
+        zoneRadiusInput.value = '150';
+        zoneNotifyEnterInput.checked = true;
+        zoneNotifyExitInput.checked = true;
+        switchZoneTab('list');
+        fetchZones();
+      } else {
+        alert('Erro ao salvar zona: ' + data.error);
+      }
+    } catch (err) {
+      alert('Erro de conexão: ' + err.message);
+    }
+  });
+}
+
+async function fetchZones() {
+  try {
+    const res = await fetch(`${backendUrl}/api/zones`);
+    const data = await res.json();
+    if (data.success) {
+      updateZones(data.zones);
+    }
+  } catch (err) {
+    console.error('Erro ao buscar zonas:', err);
+  }
+}
+
+window.deleteZone = async function(id) {
+  if (!confirm('Deseja realmente excluir esta loja / zona de entrega?')) return;
+  try {
+    const res = await fetch(`${backendUrl}/api/zones/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Zona excluída com sucesso!');
+      fetchZones();
+    } else {
+      alert('Erro ao excluir zona: ' + data.error);
+    }
+  } catch (err) {
+    alert('Erro de conexão: ' + err.message);
+  }
+};
+
+window.focusZone = function(id) {
+  const z = zones.find(item => item.id === id);
+  if (z && map) {
+    zoneModal.classList.remove('open');
+    map.setView([z.latitude, z.longitude], 17);
+    const layer = zoneLayers.get(id);
+    if (layer && layer.marker) {
+      layer.marker.openPopup();
+    }
+  }
+};
+
 // Inicialização Geral
 window.addEventListener('DOMContentLoaded', () => {
   initMap();
   setupSocket();
+  fetchZones();
   if (socket) attachWhatsAppSocketListeners(socket);
 });

@@ -110,6 +110,9 @@
             <button id="btnToggleTrail" class="btn btn-secondary">
               <i class="fa-solid fa-route"></i> Mostrar Rota Percorrida
             </button>
+            <button id="btnAddZone" class="btn btn-primary" style="background: linear-gradient(135deg, #10b981, #059669);">
+              <i class="fa-solid fa-store"></i> Cadastrar Loja / Zona no Mapa
+            </button>
             <button id="btnOpenMaps" class="btn btn-secondary">
               <i class="fa-brands fa-google"></i> Abrir no Google Maps
             </button>
@@ -152,6 +155,22 @@
         </button>
       </div>
 
+      <!-- Banner de Modo de Seleção no Mapa -->
+      <div id="zoneSelectionBanner" class="zone-selection-banner" style="display: none;">
+        <span><i class="fa-solid fa-crosshairs"></i> <strong>Modo Seleção Ativo:</strong> Clique em qualquer ponto do mapa para posicionar a loja do cliente.</span>
+        <button id="btnCancelZoneSelection" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;">Cancelar</button>
+      </div>
+
+      <!-- Banner Flutuante de Alerta de Zona (Chegada / Saída) -->
+      <div id="zoneAlertBanner" class="zone-alert-banner" style="display: none;">
+        <div class="zone-alert-icon"><i class="fa-solid fa-bell"></i></div>
+        <div class="zone-alert-content">
+          <div id="zoneAlertTitle" class="zone-alert-title">Alerta de Entrega</div>
+          <div id="zoneAlertDesc" class="zone-alert-desc">O motoqueiro entrou na zona da loja.</div>
+        </div>
+        <button id="btnCloseZoneAlert" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
       <!-- Toast de Alerta -->
       <div id="toast" class="toast">
         <i class="fa-solid fa-satellite-dish" style="color: var(--accent-blue);"></i>
@@ -159,6 +178,113 @@
       </div>
     </main>
 
+  </div>
+
+  <!-- Modal de Cadastro e Gerenciamento de Zonas / Lojas de Clientes -->
+  <div id="zoneModal" class="modal-overlay">
+    <div class="modal-box" style="width: 600px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+        <h2 style="margin: 0; font-size: 1.15rem; display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-store" style="color: var(--accent-green);"></i> Lojas & Zonas de Entrega no Mapa
+        </h2>
+        <button id="btnCloseZoneModal" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.8rem;">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Abas: Cadastrar Nova Loja / Ver Lojas Cadastradas -->
+      <div style="display: flex; gap: 8px; margin-bottom: 14px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+        <button id="tabNewZone" class="btn btn-primary" style="font-size: 0.8rem; padding: 6px 12px;">
+          <i class="fa-solid fa-plus"></i> Cadastrar Loja
+        </button>
+        <button id="tabListZones" class="btn btn-secondary" style="font-size: 0.8rem; padding: 6px 12px;">
+          <i class="fa-solid fa-list-check"></i> Lojas Cadastradas (<span id="zonesCount">0</span>)
+        </button>
+      </div>
+
+      <!-- Conteúdo da Aba 1: Formulário de Cadastro -->
+      <div id="zoneFormSection" style="flex: 1; overflow-y: auto; padding-right: 6px;">
+        <form id="zoneForm">
+          <input type="hidden" id="zoneId" />
+
+          <div style="margin-bottom: 12px;">
+            <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Nome da Loja / Cliente / Estabelecimento *</label>
+            <input type="text" id="zoneName" placeholder="Ex: Pizzaria Fornalha ou Casa do João" required style="margin: 0;" />
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+            <div>
+              <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Latitude *</label>
+              <input type="number" step="any" id="zoneLat" placeholder="-3.7319" required style="margin: 0;" />
+            </div>
+            <div>
+              <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Longitude *</label>
+              <input type="number" step="any" id="zoneLng" placeholder="-38.5267" required style="margin: 0;" />
+            </div>
+          </div>
+
+          <div style="margin-bottom: 12px;">
+            <button type="button" id="btnPickOnMap" class="btn btn-secondary" style="width: 100%; border: 1px dashed var(--accent-blue); color: var(--accent-blue); font-size: 0.85rem; padding: 8px;">
+              <i class="fa-solid fa-location-crosshairs"></i> Clicar no Mapa para Selecionar o Local da Loja
+            </button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+            <div>
+              <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Raio da Zona (Metros) *</label>
+              <input type="number" id="zoneRadius" value="150" min="20" max="5000" required style="margin: 0;" />
+              <small style="font-size: 0.7rem; color: var(--text-muted);">Padrão: 150 metros ao redor da loja</small>
+            </div>
+            <div>
+              <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">WhatsApp do Cliente (Opcional)</label>
+              <input type="text" id="zonePhone" placeholder="Ex: 5585999998888" style="margin: 0;" />
+              <small style="font-size: 0.7rem; color: var(--text-muted);">Para envio automático via Zapo</small>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 12px;">
+            <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Nome do Contato / Cliente</label>
+            <input type="text" id="zoneCustomerName" placeholder="Ex: Carlos Oliveira" style="margin: 0;" />
+          </div>
+
+          <!-- Opções de Notificação -->
+          <div style="background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 14px;">
+            <div style="font-size: 0.8rem; font-weight: bold; color: var(--accent-blue); margin-bottom: 8px;">
+              <i class="fa-solid fa-robot"></i> Notificações Automáticas no WhatsApp (Zapo)
+            </div>
+
+            <!-- Avisar ao Chegar -->
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.8rem; cursor: pointer; margin-bottom: 6px;">
+              <input type="checkbox" id="zoneNotifyEnter" checked style="width: auto; margin: 0;" />
+              <span>Avisar cliente quando o entregador <strong>chegar</strong> na loja / destino</span>
+            </label>
+            <input type="text" id="zoneEnterMsg" placeholder="Ex: Olá! O entregador acabou de chegar com seu pedido!" style="font-size: 0.8rem; padding: 6px 10px; margin-top: 2px; margin-bottom: 10px;" />
+
+            <!-- Avisar ao Sair -->
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.8rem; cursor: pointer; margin-bottom: 6px;">
+              <input type="checkbox" id="zoneNotifyExit" checked style="width: auto; margin: 0;" />
+              <span>Avisar cliente quando o entregador <strong>sair</strong> (a caminho com o pedido)</span>
+            </label>
+            <input type="text" id="zoneExitMsg" placeholder="Ex: Olá! O entregador saiu e está a caminho com seu pedido!" style="font-size: 0.8rem; padding: 6px 10px; margin-top: 2px; margin-bottom: 0;" />
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" id="btnCancelZoneForm" class="btn btn-secondary">Cancelar</button>
+            <button type="submit" class="btn btn-primary" style="background: linear-gradient(135deg, #10b981, #059669);">
+              <i class="fa-solid fa-floppy-disk"></i> Salvar Loja / Zona
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Conteúdo da Aba 2: Lista de Lojas Cadastradas -->
+      <div id="zoneListSection" style="display: none; flex: 1; overflow-y: auto; padding-right: 6px;">
+        <div id="zonesListContainer" style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- Itens preenchidos via JS -->
+        </div>
+      </div>
+
+    </div>
   </div>
 
   <!-- Modal de Configuração de Backend (para Vercel / VPS) -->
