@@ -1,119 +1,93 @@
 # 🛰️ Rastreador GPS em Tempo Real 24/7
 
-Sistema completo de rastreamento e telemetria GPS em tempo real para monitorar celulares, com mapa interativo (OpenStreetMap / Leaflet), histórico de percurso e banco de dados baseado em arquivos `.sql`.
+<div align="center">
+
+<img src="iconeapk.png" width="120" height="120" alt="Ícone Rastreador GPS" style="border-radius: 24px;" />
+
+## 📱 DOWNLOAD DO APLICATIVO MOBILE (APK)
+
+Clique no botão abaixo para baixar o instalador diretamente no seu celular Android:
+
+[![Baixar APK Rastreador GPS](https://img.shields.io/badge/BAIXAR_APK-RastreadorGPS.apk-22c55e?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Rayan-Novik/Rastreador/releases/latest/download/RastreadorGPS.apk)
+[![Página de Releases](https://img.shields.io/badge/Outras_Versões-Página_de_Releases-38bdf8?style=for-the-badge&logo=github)](https://github.com/Rayan-Novik/Rastreador/releases)
+
+### 📲 [👉 CLIQUE AQUI PARA BAIXAR O ARQUIVO APK](https://github.com/Rayan-Novik/Rastreador/releases/latest/download/RastreadorGPS.apk)
 
 ---
 
-## 📋 Arquitetura do Projeto
+</div>
 
-- **Backend (Node.js + Express + Socket.IO)**: 
-  - API REST e WebSocket com baixa latência para transmissão de coordenadas contínuas.
-  - Gravação automática de todas as transações em arquivo SQL (`data/database.sql`).
-  - Porta padrão configurada: `6548`.
-- **Painel Web (Dashboard)**:
-  - Mapa interativo em tempo real via **Leaflet / OpenStreetMap** (sem custo de API).
-  - Marcador dinâmico de GPS com raio de precisão e bússola de direção.
-  - Telemetria HUD: Velocidade (km/h), Nível de bateria, Precisão do satélite, Status online/offline e Última atualização.
-  - Desenho e histórico da rota percorrida (polylines).
-- **Rastreador Mobile (`/tracker.html`)**:
-  - Interface otimizada para celular com PWA instalável.
-  - Coleta precisa via `navigator.geolocation.watchPosition` (GPS satélite).
-  - Monitoramento de bateria e Screen Wake Lock para manter a transmissão ativa.
+## 📌 Guia Rápido: Como Instalar e Ativar no Celular
 
----
-
-## 🚀 Como Executar Localmente
-
-1. Abra a pasta do projeto:
-```bash
-cd c:\Users\Suporte-13\Desktop\Rayan\rastreador
-```
-
-2. Instale as dependências (já instaladas):
-```bash
-npm install
-```
-
-3. Inicie o servidor:
-```bash
-npm start
-```
-
-- **Painel Web (Mapa):** [http://localhost:6548](http://localhost:6548)
-- **Rastreador do Celular:** [http://localhost:6548/tracker.html](http://localhost:6548/tracker.html)
+1. **Baixar o APK**: Toque no link verde acima direto pelo celular Android.
+2. **Instalar**: Abra o arquivo `RastreadorGPS.apk` baixado e selecione **Instalar** (se o Android perguntar sobre fontes desconhecidas, clique em *Permitir desta fonte*).
+3. **Configuração e Permissões**:
+   - Abra o aplicativo **Rastreador GPS**.
+   - Defina o nome do aparelho (ex: `Celular Filho`).
+   - O servidor já vem configurado: `http://169.58.140.109:6548`.
+   - Mantenha a opção **"Rastrear em 2° plano (24/7)"** ativada.
+   - Toque em **"INICIAR RASTREAMENTO"**.
+4. **Permissão de Segundo Plano**:
+   - Quando o sistema solicitar a permissão de localização, selecione:  
+     👉 **"Permitir o tempo todo"** *(Allow all the time)*.
+   - O app exibirá uma notificação fixa na barra de status indicando que o rastreamento está ativo 24 horas por dia.
 
 ---
 
-## 🌐 Como Subir o Backend na VPS (Linux)
+## 🌐 Alternativa Web PWA (Sem precisar instalar APK)
 
-### 1. Conectar via SSH na sua VPS:
-```bash
-ssh root@169.58.140.109
-```
-
-### 2. Liberar a porta 6548 no Firewall:
-```bash
-sudo ufw allow 6548/tcp
-sudo ufw reload
-```
-
-### 3. Instalar Node.js e PM2 (caso ainda não tenha):
-```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs git
-sudo npm install -g pm2
-```
-
-### 4. Clonar ou copiar o projeto para a VPS:
-```bash
-# Na pasta de sua escolha (ex: /var/www/rastreador):
-mkdir -p /var/www/rastreador
-cd /var/www/rastreador
-
-# Copie os arquivos do projeto para cá e execute:
-npm install
-```
-
-### 5. Iniciar o backend rodando 24h em segundo plano com PM2:
-```bash
-pm2 start server/server.js --name "gps-tracker"
-pm2 save
-pm2 startup
-```
-
-Agora o backend estará rodando 24 horas por dia na porta `6548`!
-
----
-
-## 📱 Como Usar no Celular para Rastrear
-
-1. No celular do seu filho, abra o navegador (Chrome ou Safari) e acesse:
+Se preferir não instalar o arquivo APK, o sistema possui versão web instalável:
+1. No navegador do celular (Chrome ou Safari), acesse:
    ```text
    http://169.58.140.109:6548/tracker.html
    ```
-2. Defina o nome do aparelho (ex: `Celular Filho`).
-3. Toque no botão verde **"Iniciar Rastreamento"**.
-4. Quando o navegador solicitar a permissão de localização, selecione **"Permitir sempre"** ou **"Durante o uso do app"**.
-5. **Dica PWA:** No Chrome do celular, toque no menu de 3 pontinhos e clique em **"Adicionar à tela inicial"**. O rastreador se transformará em um ícone de aplicativo nativo na tela do aparelho.
+2. Toque no botão de menu do navegador (3 pontinhos) e clique em **"Adicionar à tela inicial"**.
+3. O ícone oficial será adicionado à tela do celular como um aplicativo.
 
 ---
 
-## ⚡ Como Hospedar o Painel Web na Vercel (Opcional)
+## 🗺️ Painel Web do Mapa em Tempo Real
 
-Se você preferir rodar a interface web na Vercel e o backend na sua VPS:
+Para acompanhar o celular no mapa interativo:
 
-1. Faça o deploy da pasta do projeto na [Vercel](https://vercel.com) (o arquivo `vercel.json` já está configurado para servir a pasta `public`).
-2. Acesse seu painel no link gerado pela Vercel (ex: `https://seu-rastreador.vercel.app`).
-3. Clique no botão **"Configs"** no canto inferior esquerdo da barra lateral.
-4. Digite a URL da sua VPS: `http://169.58.140.109:6548` e clique em **Salvar e Reconectar**.
-5. Pronto! O painel na Vercel se conectará em tempo real com a VPS.
+- **Acesso direto pelo navegador:** [http://169.58.140.109:6548](http://169.58.140.109:6548)
+- **Local (no seu PC):** [http://localhost:6548](http://localhost:6548)
+
+### Recursos do Painel:
+- **Mapas sem restrição de API**: OpenStreetMap, Satélite Real (ArcGIS ESRI), Ruas e Topográfico.
+- **Telemetria completa**: Velocidade em tempo real (km/h), nível de bateria do celular, raio de precisão do GPS e direção.
+- **Histórico e Rota**: Traçado contínuo da rota percorrida pelo aparelho.
+- **Banco de Dados SQL**: Gravação automática em tempo real em arquivo SQL (`data/database.sql`) com botão de download no próprio painel.
+
+---
+
+## 🚀 Como Rodar o Backend na VPS (`169.58.140.109`)
+
+1. **Liberar a porta 6548 no firewall da VPS:**
+   ```bash
+   sudo ufw allow 6548/tcp
+   sudo ufw reload
+   ```
+
+2. **Baixar o repositório na VPS:**
+   ```bash
+   git clone https://github.com/Rayan-Novik/Rastreador.git /var/www/rastreador
+   cd /var/www/rastreador
+   npm install
+   ```
+
+3. **Iniciar em segundo plano 24h com PM2:**
+   ```bash
+   sudo npm install -g pm2
+   pm2 start server/server.js --name "rastreador-gps"
+   pm2 save
+   pm2 startup
+   ```
 
 ---
 
 ## 💾 Banco de Dados SQL
-
-- Todo sinal de GPS recebido é salvo imediatamente no arquivo `data/database.sql`.
-- Você pode baixar o arquivo SQL a qualquer momento diretamente pelo painel clicando em **"Baixar SQL"** ou acessando:
-  ```text
-  http://169.58.140.109:6548/api/database.sql
-  ```
+O banco grava todas as coordenadas recebidas no arquivo `data/database.sql`. Você pode fazer o download do arquivo SQL pelo painel ou acessando:
+```text
+http://169.58.140.109:6548/api/database.sql
+```

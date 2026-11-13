@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,45 +21,43 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
-      - name: Configurar Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Dar permissão ao Gradle Wrapper
+        run: |
+          chmod +x android-app/gradlew
 
-      - name: Dar permissão de execução ao Gradle Wrapper
+      - name: Compilar APK Android
         run: |
           cd android-app
-          chmod +x gradlew || true
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Compilar APK (assembleDebug)
-        run: |
-          cd android-app
-          if [ ! -f gradlew ]; then
-            gradle wrapper
-          fi
-          ./gradlew assembleDebug --stacktrace
-
-      - name: Renomear APK
+      - name: Preparar APK para Download
         run: |
           mkdir -p release-apk
           cp android-app/app/build/outputs/apk/debug/app-debug.apk release-apk/RastreadorGPS.apk
 
-      - name: Fazer Upload do APK como Artefato
+      - name: Fazer Upload do APK nos Artefatos
         uses: actions/upload-artifact@v4
         with:
           name: RastreadorGPS-APK
           path: release-apk/RastreadorGPS.apk
 
-      - name: Criar Release no GitHub com o APK
+      - name: Publicar Release com Download Direto do APK
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
           tag_name: v1.0.0
-          name: Rastreador GPS v1.0.0 (APK)
+          name: "📱 Rastreador GPS Mobile (APK Oficial)"
           body: |
-            ### 📱 Download do Aplicativo Rastreador GPS
-            - Baixe o arquivo **RastreadorGPS.apk** abaixo e instale no celular Android.
-            - Conectado em tempo real com o backend na VPS: `http://169.58.140.109:6548`
-            - Suporte a segundo plano 24/7 com notificação persistente.
+            ## 📥 Download do Rastreador GPS para Celular Android
+            
+            Clique abaixo para baixar o instalador no seu celular:
+            - **[👉 BAIXAR RastreadorGPS.apk](https://github.com/Rayan-Novik/Rastreador/releases/download/v1.0.0/RastreadorGPS.apk)**
+            
+            ### 🛠️ Configurações Pré-definidas no App:
+            - **Servidor:** `http://169.58.140.109:6548`
+            - **Segundo Plano:** Ativo 24/7 (requer permissão de localização "Permitir o tempo todo").
+            - **Ícone:** Personalizado com o logo oficial do app.
           files: release-apk/RastreadorGPS.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
