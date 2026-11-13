@@ -1,0 +1,10 @@
+node_modules/
+.env
+data/state.json
+data/*.db
+.DS_Store
+Thumbs.db
+*.log
+.gradle/
+build/
+app/build/

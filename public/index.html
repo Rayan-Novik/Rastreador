@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel de Rastreamento GPS em Tempo Real</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Sidebar de Controle e Telemetria -->
+    <aside class="sidebar">
+      
+      <!-- Cabeçalho -->
+      <div class="sidebar-header">
+        <div class="logo-area">
+          <div class="logo-icon">
+            <i class="fa-solid fa-location-crosshairs"></i>
+          </div>
+          <div class="logo-title">
+            <h1>GPS Monitor</h1>
+            <span>Tempo Real 24/7</span>
+          </div>
+        </div>
+        <div id="connectionBadge" class="server-badge offline">
+          <span class="pulse-dot"></span>
+          <span id="connectionText">Conectando...</span>
+        </div>
+      </div>
+
+      <!-- Conteúdo com Scroll -->
+      <div class="sidebar-content">
+        
+        <!-- Seleção de Dispositivo -->
+        <div class="card-section">
+          <div class="section-label">
+            <span>Dispositivo Ativo</span>
+            <span id="deviceCountBadge" style="color: var(--accent-blue);">0 dispositivos</span>
+          </div>
+          <select id="deviceSelect" class="device-select">
+            <option value="" disabled selected>Aguardando sinal do celular...</option>
+          </select>
+        </div>
+
+        <!-- Telemetria em Tempo Real (HUD) -->
+        <div class="card-section">
+          <div class="section-label">
+            <span>Telemetria do Celular</span>
+            <span id="statusIndicator" style="color: var(--accent-green); font-weight: bold;">● Online</span>
+          </div>
+          
+          <div class="hud-grid">
+            
+            <div class="hud-item full-width">
+              <span class="hud-title"><i class="fa-regular fa-clock"></i> Última Atualização</span>
+              <span id="hudLastUpdate" class="hud-value" style="font-size: 0.95rem;">--</span>
+              <span id="hudTimeAgo" class="hud-sub">Aguardando dados</span>
+            </div>
+
+            <div class="hud-item">
+              <span class="hud-title"><i class="fa-solid fa-gauge-high"></i> Velocidade</span>
+              <span id="hudSpeed" class="hud-value">0 <small style="font-size:0.75rem; font-weight:normal;">km/h</small></span>
+              <span class="hud-sub" id="hudMovingState">Parado</span>
+            </div>
+
+            <div class="hud-item">
+              <span class="hud-title"><i class="fa-solid fa-battery-half"></i> Bateria</span>
+              <span id="hudBattery" class="hud-value">-- %</span>
+              <span class="hud-sub" id="hudBatteryState">Status normal</span>
+            </div>
+
+            <div class="hud-item">
+              <span class="hud-title"><i class="fa-solid fa-bullseye"></i> Precisão GPS</span>
+              <span id="hudAccuracy" class="hud-value">-- m</span>
+              <span class="hud-sub" id="hudAccuracyLevel">Calculando...</span>
+            </div>
+
+            <div class="hud-item">
+              <span class="hud-title"><i class="fa-solid fa-compass"></i> Direção</span>
+              <span id="hudHeading" class="hud-value">-- °</span>
+              <span class="hud-sub">Bússola</span>
+            </div>
+
+            <div class="hud-item full-width">
+              <span class="hud-title"><i class="fa-solid fa-map-pin"></i> Coordenadas GPS</span>
+              <span id="hudCoords" class="hud-value" style="font-size: 0.85rem; font-family: monospace;">--</span>
+              <span class="hud-sub" id="hudAltitude">Altitude: --</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Controles de Navegação e Histórico -->
+        <div class="card-section">
+          <div class="section-label">
+            <span>Ações e Rota</span>
+          </div>
+          <div class="controls-group">
+            <button id="btnFollow" class="btn btn-primary">
+              <i class="fa-solid fa-crosshairs"></i> Centralizar no Celular
+            </button>
+            <button id="btnToggleTrail" class="btn btn-secondary">
+              <i class="fa-solid fa-route"></i> Mostrar Rota Percorrida
+            </button>
+            <button id="btnOpenMaps" class="btn btn-secondary">
+              <i class="fa-brands fa-google"></i> Abrir no Google Maps
+            </button>
+            <button id="btnClearTrail" class="btn btn-danger">
+              <i class="fa-solid fa-trash-can"></i> Limpar Rota
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Rodapé com Links -->
+      <footer class="sidebar-footer">
+        <div class="quick-links">
+          <a href="/tracker.html" target="_blank" class="link-btn">
+            <i class="fa-solid fa-mobile-screen-button"></i> Abrir Rastreador
+          </a>
+          <a href="/api/database.sql" target="_blank" class="link-btn">
+            <i class="fa-solid fa-database"></i> Baixar SQL
+          </a>
+          <button id="btnConfigModal" class="link-btn" style="border:none; cursor:pointer;">
+            <i class="fa-solid fa-gear"></i> Configs
+          </button>
+        </div>
+      </footer>
+
+    </aside>
+
+    <!-- Mapa Principal -->
+    <main class="map-wrapper">
+      <div id="map"></div>
+
+      <!-- Controles Flutuantes no Mapa -->
+      <div class="map-floating-controls">
+        <button id="btnRecenterFloat" class="float-btn" title="Centralizar no celular">
+          <i class="fa-solid fa-location-arrow"></i>
+        </button>
+        <button id="btnLayerToggle" class="float-btn" title="Alternar estilo do mapa">
+          <i class="fa-solid fa-layer-group"></i>
+        </button>
+      </div>
+
+      <!-- Toast de Alerta -->
+      <div id="toast" class="toast">
+        <i class="fa-solid fa-satellite-dish" style="color: var(--accent-blue);"></i>
+        <span id="toastMsg">Sinal GPS recebido com sucesso!</span>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- Modal de Configuração de Backend (para Vercel / VPS) -->
+  <div id="configModal" class="modal-overlay">
+    <div class="modal-box">
+      <h2><i class="fa-solid fa-sliders"></i> Conexão com o Backend</h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+        Se você hospedar este painel na Vercel e o backend na VPS, informe o IP e a porta da VPS aqui:
+      </p>
+      <label style="font-size: 0.8rem; color: var(--text-muted);">URL do Backend:</label>
+      <input type="text" id="backendUrlInput" placeholder="Ex: http://169.58.140.109:6548" />
+      <div style="display:flex; gap: 10px; justify-content: flex-end;">
+        <button id="btnCancelConfig" class="btn btn-secondary">Cancelar</button>
+        <button id="btnSaveConfig" class="btn btn-primary">Salvar e Reconectar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- Socket.IO Client -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- Dashboard Script -->
+  <script src="app.js"></script>
+</body>
+</html>

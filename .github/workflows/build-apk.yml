@@ -1,0 +1,62 @@
+name: Build APK Rastreador GPS
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Dar permissão de execução ao Gradle Wrapper
+        run: |
+          cd android-app
+          chmod +x gradlew || true
+
+      - name: Compilar APK (assembleDebug)
+        run: |
+          cd android-app
+          if [ ! -f gradlew ]; then
+            gradle wrapper
+          fi
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Renomear APK
+        run: |
+          mkdir -p release-apk
+          cp android-app/app/build/outputs/apk/debug/app-debug.apk release-apk/RastreadorGPS.apk
+
+      - name: Fazer Upload do APK como Artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: RastreadorGPS-APK
+          path: release-apk/RastreadorGPS.apk
+
+      - name: Criar Release no GitHub com o APK
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
+        with:
+          tag_name: v1.0.0
+          name: Rastreador GPS v1.0.0 (APK)
+          body: |
+            ### 📱 Download do Aplicativo Rastreador GPS
+            - Baixe o arquivo **RastreadorGPS.apk** abaixo e instale no celular Android.
+            - Conectado em tempo real com o backend na VPS: `http://169.58.140.109:6548`
+            - Suporte a segundo plano 24/7 com notificação persistente.
+          files: release-apk/RastreadorGPS.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "outputDirectory": "public",
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/tracker", "destination": "/tracker.html" },
+    { "source": "/(.*)", "destination": "/$1" }
+  ]
+}

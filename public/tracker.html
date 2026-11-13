@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <title>Rastreador GPS Mobile</title>
+  
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --primary: #38bdf8;
+      --success: #22c55e;
+      --danger: #f43f5e;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --border: rgba(255, 255, 255, 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 16px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .header {
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    .header-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+      margin-bottom: 12px;
+    }
+
+    .header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+
+    .header p {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    }
+
+    .status-badge-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: rgba(244, 63, 94, 0.15);
+      color: var(--danger);
+    }
+
+    .badge.active {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--success);
+    }
+
+    .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .input-group label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .input-group input, .input-group select {
+      background: #0b1120;
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 12px 14px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      outline: none;
+    }
+
+    .input-group input:focus, .input-group select:focus {
+      border-color: var(--primary);
+    }
+
+    .btn-main {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 15px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+      transition: all 0.2s;
+    }
+
+    .btn-main.stop {
+      background: linear-gradient(135deg, #f43f5e, #e11d48);
+      box-shadow: 0 4px 15px rgba(244, 63, 94, 0.4);
+    }
+
+    /* Grid de Telemetria no Celular */
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .telemetry-item {
+      background: #0b1120;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .telemetry-item.full {
+      grid-column: span 2;
+    }
+
+    .telemetry-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .telemetry-val {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .footer-links {
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+
+    .footer-links a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <header class="header">
+      <div class="header-icon">
+        <i class="fa-solid fa-satellite-dish"></i>
+      </div>
+      <h1>GPS Tracker Celular</h1>
+      <p>Transmissor de localização em tempo real</p>
+    </header>
+
+    <div class="card">
+      <div class="status-badge-container">
+        <span style="font-size: 0.85rem; color: var(--muted);">Status da Transmissão</span>
+        <div id="statusBadge" class="badge">
+          <span class="pulse"></span>
+          <span id="statusText">Parado</span>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label>Nome / Identificação do Celular</label>
+        <input type="text" id="deviceNameInput" placeholder="Ex: Celular Filho, Rayan..." value="Meu Celular">
+      </div>
+
+      <div class="input-group">
+        <label>Servidor Backend (VPS / Local)</label>
+        <input type="text" id="serverUrlInput" placeholder="http://169.58.140.109:6548">
+      </div>
+
+      <div class="input-group">
+        <label>Intervalo de Envio</label>
+        <select id="intervalSelect">
+          <option value="2000" selected>A cada 2 segundos (Alta precisão)</option>
+          <option value="5000">A cada 5 segundos (Equilibrado)</option>
+          <option value="10000">A cada 10 segundos (Economia bateria)</option>
+        </select>
+      </div>
+
+      <button id="btnToggleTracking" class="btn-main">
+        <i class="fa-solid fa-play"></i> Iniciar Rastreamento
+      </button>
+    </div>
+
+    <!-- Telemetria Enviada -->
+    <div class="card">
+      <div style="font-size: 0.85rem; font-weight: 600; color: var(--muted); text-transform: uppercase;">
+        <i class="fa-solid fa-tower-broadcast"></i> Dados do GPS Enviados
+      </div>
+
+      <div class="telemetry-grid">
+        <div class="telemetry-item">
+          <div class="telemetry-label"><i class="fa-solid fa-bullseye"></i> Precisão</div>
+          <div id="statAccuracy" class="telemetry-val">-- m</div>
+        </div>
+
+        <div class="telemetry-item">
+          <div class="telemetry-label"><i class="fa-solid fa-gauge-high"></i> Velocidade</div>
+          <div id="statSpeed" class="telemetry-val">-- km/h</div>
+        </div>
+
+        <div class="telemetry-item">
+          <div class="telemetry-label"><i class="fa-solid fa-battery-half"></i> Bateria</div>
+          <div id="statBattery" class="telemetry-val">-- %</div>
+        </div>
+
+        <div class="telemetry-item">
+          <div class="telemetry-label"><i class="fa-solid fa-paper-plane"></i> Pacotes Enviados</div>
+          <div id="statCount" class="telemetry-val">0</div>
+        </div>
+
+        <div class="telemetry-item full">
+          <div class="telemetry-label"><i class="fa-solid fa-location-dot"></i> Coordenadas Atuais</div>
+          <div id="statCoords" class="telemetry-val" style="font-size: 0.85rem; font-family: monospace;">Aguardando GPS...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-links">
+      <p><a href="/" target="_blank"><i class="fa-solid fa-map"></i> Acessar Painel com o Mapa</a></p>
+      <p style="margin-top: 6px;">💡 Dica: no Chrome do celular, toque em "Adicionar à tela inicial" para instalar como app.</p>
+    </div>
+
+  </div>
+
+  <!-- Script do Rastreador -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="tracker.js"></script>
+</body>
+</html>
