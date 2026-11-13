@@ -232,7 +232,7 @@ function updateHUD(dev) {
 }
 
 /**
- * Move o marcador no mapa suavemente
+ * Move o marcador no mapa suavemente com Filtro de Deslocamento Mínimo
  */
 function updateMapLocation(lat, lng, accuracy, heading) {
   const newLatLng = new L.LatLng(lat, lng);
@@ -243,10 +243,23 @@ function updateMapLocation(lat, lng, accuracy, heading) {
     accuracyCircle.setRadius(accuracy);
   }
 
-  // Adiciona ao traçado
-  routeCoordinates.push(newLatLng);
-  if (showTrail) {
-    routePolyline.setLatLngs(routeCoordinates);
+  // Verifica se o ponto realmente teve deslocamento significativo antes de adicionar à linha da rota
+  if (routeCoordinates.length > 0) {
+    const lastPoint = routeCoordinates[routeCoordinates.length - 1];
+    const distMeters = map.distance(lastPoint, newLatLng);
+
+    // Se o celular se moveu menos de 10 metros, não cria zigue-zague na linha
+    if (distMeters >= 10) {
+      routeCoordinates.push(newLatLng);
+      if (showTrail) {
+        routePolyline.setLatLngs(routeCoordinates);
+      }
+    }
+  } else {
+    routeCoordinates.push(newLatLng);
+    if (showTrail) {
+      routePolyline.setLatLngs(routeCoordinates);
+    }
   }
 
   if (autoFollow) {
@@ -258,14 +271,28 @@ function updateMapLocation(lat, lng, accuracy, heading) {
 }
 
 /**
- * Carrega a rota/histórico de um dispositivo
+ * Carrega a rota/histórico de um dispositivo (com filtro de pontos estáticos)
  */
 async function loadDeviceHistory(deviceId) {
   try {
     const res = await fetch(`${backendUrl}/api/devices/${deviceId}/history?limit=300`);
     const data = await res.json();
     if (data.success && Array.isArray(data.history)) {
-      routeCoordinates = data.history.map(pt => new L.LatLng(pt.latitude, pt.longitude));
+      const filtered = [];
+      data.history.forEach(pt => {
+        const p = new L.LatLng(pt.latitude, pt.longitude);
+        if (filtered.length === 0) {
+          filtered.push(p);
+        } else {
+          const prev = filtered[filtered.length - 1];
+          // Só desenha se houver pelo menos 10m de distância entre pontos
+          if (map.distance(prev, p) >= 10) {
+            filtered.push(p);
+          }
+        }
+      });
+
+      routeCoordinates = filtered;
       if (showTrail) {
         routePolyline.setLatLngs(routeCoordinates);
       }

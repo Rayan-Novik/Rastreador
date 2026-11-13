@@ -86,12 +86,12 @@ function appendSqlStatement(sqlStatement) {
 }
 
 /**
- * Registra uma nova localização enviada pelo celular
+ * Registra uma nova localização enviada pelo celular com Filtro Inteligente de Ruído GPS
  */
 function saveLocation(data) {
   const {
     deviceId,
-    name = 'Dispositivo Rastreado',
+    name = 'Dispositivo Rastreador',
     latitude,
     longitude,
     accuracy = null,
@@ -109,14 +109,44 @@ function saveLocation(data) {
     throw new Error('Latitude ou Longitude inválida');
   }
 
+  const accNum = accuracy !== null && !isNaN(accuracy) ? parseFloat(accuracy) : null;
+  const speedNum = speed !== null && !isNaN(speed) ? parseFloat(speed) : 0;
+
+  // 1. FILTRO DE DRIFT / RUÍDO DE GPS ESTÁTICO (Telefone parado ou sinal impreciso)
+  const existingDevice = dbState.devices.get(deviceId);
+  
+  if (existingDevice && existingDevice.last_latitude && existingDevice.last_longitude) {
+    // Calcula distância em metros entre o último ponto e o ponto atual (fórmula de Haversine simplificada)
+    const dLat = (latNum - existingDevice.last_latitude) * 111320;
+    const dLng = (lngNum - existingDevice.last_longitude) * (111320 * Math.cos(existingDevice.last_latitude * (Math.PI / 180)));
+    const distanceMeters = Math.sqrt(dLat * dLat + dLng * dLng);
+
+    // Se a precisão for muito ruim (> 40 metros), ignora para não criar linhas tortas
+    if (accNum !== null && accNum > 40) {
+      console.log(`[Filtro GPS] Ponto descartado por baixa precisão: ±${accNum}m`);
+      return { device: existingDevice, location: null, ignored: true };
+    }
+
+    // Se o aparelho estiver parado (velocidade < 1.2 m/s ou ~4 km/h) e o deslocamento for menor que 12 metros,
+    // é apenas flutuação/ruído da antena GPS! Não adiciona novo traço no histórico da rota.
+    if (speedNum < 1.2 && distanceMeters < 12) {
+      // Apenas atualiza bateria e timestamp do dispositivo sem poluir o histórico
+      existingDevice.last_battery = battery !== null && !isNaN(battery) ? parseInt(battery, 10) : existingDevice.last_battery;
+      existingDevice.last_updated = new Date(timestamp).toISOString();
+      existingDevice.status = 'online';
+      persistState();
+      return { device: existingDevice, location: null, stationary: true };
+    }
+  }
+
   const id = locationAutoId++;
   const record = {
     id,
     deviceId,
     latitude: latNum,
     longitude: lngNum,
-    accuracy: accuracy !== null && !isNaN(accuracy) ? parseFloat(accuracy) : null,
-    speed: speed !== null && !isNaN(speed) ? parseFloat(speed) : null,
+    accuracy: accNum,
+    speed: speedNum,
     heading: heading !== null && !isNaN(heading) ? parseFloat(heading) : null,
     altitude: altitude !== null && !isNaN(altitude) ? parseFloat(altitude) : null,
     battery: battery !== null && !isNaN(battery) ? parseInt(battery, 10) : null,
@@ -124,16 +154,10 @@ function saveLocation(data) {
     createdAt: new Date().toISOString()
   };
 
-  // 1. Atualiza registro do dispositivo
-  const existingDevice = dbState.devices.get(deviceId) || {
-    id: deviceId,
-    name: name,
-    createdAt: new Date().toISOString()
-  };
-
+  // 2. Atualiza registro do dispositivo
   const updatedDevice = {
-    ...existingDevice,
-    name: name || existingDevice.name,
+    ...(existingDevice || { id: deviceId, createdAt: new Date().toISOString() }),
+    name: name || (existingDevice ? existingDevice.name : deviceId),
     status: 'online',
     last_latitude: record.latitude,
     last_longitude: record.longitude,

@@ -109,22 +109,20 @@ public class LocationService extends Service implements LocationListener {
         if (locationManager == null) return;
 
         try {
-            // Provedor GPS de alta precisão
+            // Provedor GPS por Satélite (com filtro de distância mínima de 10 metros para evitar teia de aranha/ruído parado)
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                         LocationManager.GPS_PROVIDER,
-                        2000L, // 2 segundos
-                        1.0f,  // 1 metro
+                        4000L, // 4 segundos
+                        10.0f, // Mínimo de 10 metros de deslocamento real
                         this
                 );
-            }
-
-            // Provedor de Rede (Torres / Wi-Fi) como fallback
-            if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+            } else if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                // Provedor de Rede (Torres / Wi-Fi) somente se GPS estiver desligado
                 locationManager.requestLocationUpdates(
                         LocationManager.NETWORK_PROVIDER,
-                        3000L,
-                        2.0f,
+                        5000L,
+                        15.0f,
                         this
                 );
             }
